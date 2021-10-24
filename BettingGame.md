@@ -33,7 +33,7 @@ contract BettingGame is VRFConsumerBase {
 ## Create the main Game() function
 
 ```
-function game(uint256 bet, uint256 seed) public payable returns (bool) {
+function game(uint256 bet) public payable returns (bool) {
     //0 is low, refers to 1-3  dice values
     //1 is high, refers to 4-6 dice values
     require(bet <= 1, "bet must be 0 or 1");
@@ -45,13 +45,13 @@ function game(uint256 bet, uint256 seed) public payable returns (bool) {
     );
 
     //each bet has unique id
-    games[gameId] = Game(gameId, bet, seed, msg.value, msg.sender);
+    games[gameId] = Game(gameId, bet, msg.value, msg.sender);
 
     //increase gameId for the next bet
     gameId = gameId + 1;
 
     //where we talk to chainlink
-    getRandomNumber(seed);
+    getRandomNumber();
 
     return true;
 }
@@ -62,67 +62,8 @@ function game(uint256 bet, uint256 seed) public payable returns (bool) {
 struct Game {
     uint256 id;
     uint256 bet;
-    uint256 seed;
     uint256 amount;
     address payable player;
-}
-```
-
-## Get a random number from chainlink API
-```
-function getRandomNumber() public returns (bytes32 requestId) {
-    require(LINK.balanceOf(address(this)) >= fee, "Not enough LINK - fill contract with faucet");
-    return requestRandomness(keyHash, fee);
-}
-```
-
-Once the chainlink call occurs, we need to fulfill the random number request:
-```
-function fulfillRandomness(bytes32 requestId, uint256 randomness) internal override {
-    randomResult = randomness;
-}
-```
-
-## Pass random number around to evaluate win or loss
-
-```
-function fulfillRandomness(bytes32 requestId, uint256 randomness) internal override {
-    randomResult = randomness;
-
-    verdict(randomResult)
-}
-```
-
-For the verdict() function:
-```
-// send the payout to the winners
-function verdict(uint256 random) public payable onlyVFRC {
-    //check bets from latest betting round, one by one
-    for (uint256 i = lastGameId; i < gameId; i++) {
-        //reset winAmount for current user
-        uint256 winAmount = 0;
-
-        //if user wins, then receives 2x of their betting amount
-        if (
-            (random >= half && games[i].bet == 1) ||
-            (random < half && games[i].bet == 0)
-        ) {
-            winAmount = games[i].amount * 2;
-            games[i].player.transfer(winAmount);
-        }
-        emit Result(
-            games[i].id,
-            games[i].bet,
-            games[i].seed,
-            games[i].amount,
-            games[i].player,
-            winAmount,
-            random,
-            block.timestamp
-        );
-    }
-    //save current gameId to lastGameId for the next betting round
-    lastGameId = gameId;
 }
 ```
 
@@ -149,14 +90,58 @@ modifier onlyVFRC() {
 constructor() public VRFConsumerBase(VFRC_address, LINK_address) {
     fee = 0.1 * 10**18; // 0.1 LINK
     admin = msg.sender;
-
-    /** !UPDATE
-        *
-        * assign ETH/USD Rinkeby contract address to the aggregator variable.
-        * more: https://docs.chain.link/docs/ethereum-addresses
-        */
 }
 
+```
+
+## Get a random number from chainlink API
+```
+function getRandomNumber() internal returns (bytes32 requestId) {
+    require(LINK.balanceOf(address(this)) >= fee, "Not enough LINK - fill contract with faucet");
+    return requestRandomness(keyHash, fee);
+}
+```
+
+Once the chainlink call occurs, we need to fulfill the random number request:
+```
+function fulfillRandomness(bytes32 requestId, uint256 randomness) internal override {
+    randomResult = randomness;
+    verdict(randomResult);
+}
+```
+
+## Pass random number around to evaluate win or loss
+
+For the verdict() function:
+```
+// send the payout to the winners
+function verdict(uint256 random) public payable onlyVRFC {
+    //check bets from latest betting round, one by one
+    for (uint256 i = lastGameId; i < gameId; i++) {
+        //reset winAmount for current user
+        uint256 winAmount = 0;
+
+        //if user wins, then receives 2x of their betting amount
+        if (
+            (random >= half && games[i].bet == 1) ||
+            (random < half && games[i].bet == 0)
+        ) {
+            winAmount = games[i].amount * 2;
+            games[i].player.transfer(winAmount);
+        }
+        emit Result(
+            games[i].id,
+            games[i].bet,
+            games[i].amount,
+            games[i].player,
+            winAmount,
+            random,
+            block.timestamp
+        );
+    }
+    //save current gameId to lastGameId for the next betting round
+    lastGameId = gameId;
+}
 ```
 
 ## Emit the results as an event
@@ -165,7 +150,6 @@ constructor() public VRFConsumerBase(VFRC_address, LINK_address) {
 event Result(
     uint256 id,
     uint256 bet,
-    uint256 randomSeed,
     uint256 amount,
     address player,
     uint256 winAmount,
