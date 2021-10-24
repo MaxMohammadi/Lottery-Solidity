@@ -13,7 +13,7 @@ contract BettingGame is VRFConsumerBase {
     uint256 public randomResult;
 
     //Network: Rinkeby
-    address constant VFRC_address = 0xb3dCcb4Cf7a26f6cf6B120Cf5A73875B7BBc655B; // VRF Coordinator
+    address constant VRFC_address = 0xb3dCcb4Cf7a26f6cf6B120Cf5A73875B7BBc655B; // VRF Coordinator
     address constant LINK_address = 0x01BE23585060835E02B77ef475b0Cc51aA1e0709; // LINK token
 
     //Seed for random generation
@@ -96,7 +96,7 @@ function fulfillRandomness(bytes32 requestId, uint256 randomness) internal overr
 For the verdict() function:
 ```
 // send the payout to the winners
-function verdict(uint256 random) public payable onlyVFRC {
+function verdict(uint256 random) public payable onlyVRFC {
     //check bets from latest betting round, one by one
     for (uint256 i = lastGameId; i < gameId; i++) {
         //reset winAmount for current user
@@ -137,8 +137,8 @@ modifier onlyAdmin() {
     _;
 }
 
-modifier onlyVFRC() {
-    require(msg.sender == VFRC_address, "only VFRC can call this function");
+modifier onlyVRFC() {
+    require(msg.sender == VFRC_address, "only VRFC can call this function");
     _;
 }
 ```
@@ -146,7 +146,7 @@ modifier onlyVFRC() {
 ## Create an interface to VRFC
 
 ```
-constructor() public VRFConsumerBase(VFRC_address, LINK_address) {
+constructor() public VRFConsumerBase(VRFC_address, LINK_address) {
     fee = 0.1 * 10**18; // 0.1 LINK
     admin = msg.sender;
 
